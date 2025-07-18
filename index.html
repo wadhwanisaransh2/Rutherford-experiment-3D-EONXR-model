@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+Put your HTML text here<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -11,10 +11,6 @@
             color: #fff;
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             overflow: hidden; /* Hide scrollbars */
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            height: 100vh;
         }
         canvas {
             display: block;
@@ -23,73 +19,27 @@
             position: absolute;
             display: none;
             padding: 15px;
-            background-color: rgba(20, 20, 30, 0.95); /* Slightly less transparent */
+            background-color: rgba(20, 20, 30, 0.9);
             border: 1px solid #00ffff;
             border-radius: 8px;
-            pointer-events: none;
+            pointer-events: none; /* So it doesn't interfere with mouse events on the canvas */
             font-size: 14px;
             line-height: 1.5;
-            box-shadow: 0 0 20px rgba(0, 255, 255, 0.7); /* Stronger glow */
-            backdrop-filter: blur(8px); /* More blur */
-            z-index: 1000;
-            transition: opacity 0.2s ease-in-out; /* Smooth fade for tooltip */
-            opacity: 0;
-        }
-        #tooltip.active {
-            opacity: 1;
+            box-shadow: 0 0 15px rgba(0, 255, 255, 0.5);
+            backdrop-filter: blur(5px);
         }
         #tooltip h3 {
             margin: 0 0 10px 0;
             color: #00ffff;
             font-size: 18px;
-            border-bottom: 1px solid rgba(0, 255, 255, 0.5);
-            padding-bottom: 5px;
         }
         #tooltip p {
             margin: 0;
-            color: #e0e0e0;
-        }
-
-        /* Loading Spinner */
-        #loading-screen {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background-color: #05050c;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            flex-direction: column;
-            z-index: 2000;
-            transition: opacity 0.5s ease-out;
-        }
-        .spinner {
-            border: 8px solid rgba(0, 255, 255, 0.3);
-            border-top: 8px solid #00ffff;
-            border-radius: 50%;
-            width: 60px;
-            height: 60px;
-            animation: spin 1s linear infinite;
-        }
-        .loading-text {
-            color: #00ffff;
-            margin-top: 20px;
-            font-size: 1.2em;
-        }
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
         }
     </style>
 </head>
 <body>
 
-    <div id="loading-screen">
-        <div class="spinner"></div>
-        <div class="loading-text">Loading 3D Periodic Table...</div>
-    </div>
     <div id="tooltip"></div>
 
     <script async src="https://unpkg.com/es-module-shims@1.6.3/dist/es-module-shims.js"></script>
@@ -105,11 +55,6 @@
     <script type="module">
         import * as THREE from 'three';
         import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-        import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
-        import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
-        import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
-        import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-        import { ImprovedNoise } from 'three/addons/math/ImprovedNoise.js'; // For particle animation
 
         // --- DATA: All 118 Elements ---
         const elementData = [
@@ -234,87 +179,62 @@
             ["Og", "Oganesson", 118, 294, "unknown", 18, 7]
         ];
 
-        // Define a broader, more vibrant color palette.
-        // These colors are chosen for better visual separation and aesthetic appeal.
         const categoryColors = {
-            "diatomic nonmetal": 0xFF6B6B, // Vibrant Red
-            "noble gas": 0x4ECDC4,        // Teal
-            "alkali metal": 0xFFA07A,     // Light Salmon (warm)
-            "alkaline earth metal": 0xFDCB5E, // Gold (warm)
-            "metalloid": 0x6A0572,        // Deep Purple
-            "polyatomic nonmetal": 0xBB86FC, // Light Purple
-            "post-transition metal": 0x03DAC6, // Aqua (cool)
-            "transition metal": 0x00BFFF,  // Deep Sky Blue
-            "lanthanide": 0xDA70D6,       // Orchid
-            "actinide": 0xFF4500,         // Orange Red
-            "unknown": 0x505050           // Dark Grey for unknown
+            "diatomic nonmetal": 0xf4a261,
+            "noble gas": 0x219ebc,
+            "alkali metal": 0xe76f51,
+            "alkaline earth metal": 0xfca311,
+            "metalloid": 0x2a9d8f,
+            "polyatomic nonmetal": 0xe9c46a,
+            "post-transition metal": 0xa8dadc,
+            "transition metal": 0x457b9d,
+            "lanthanide": 0x8d99ae,
+            "actinide": 0xef233c,
+            "unknown": 0x2d3a4b
         };
 
         // --- Core Three.js Components ---
-        let scene, camera, renderer, controls, composer, raycaster, mouse;
+        let scene, camera, renderer, controls;
         let periodicTableGroup;
         const objects = [];
+        const raycaster = new THREE.Raycaster();
+        const mouse = new THREE.Vector2();
         let intersected;
-        let particles;
 
         const tooltip = document.getElementById('tooltip');
-        const loadingScreen = document.getElementById('loading-screen');
 
         function init() {
-            // Hide loading screen after everything is initialized
-            loadingScreen.style.opacity = '0';
-            loadingScreen.addEventListener('transitionend', () => {
-                loadingScreen.style.display = 'none';
-            }, { once: true });
-
             // Scene
             scene = new THREE.Scene();
-            scene.background = new THREE.Color(0x0a0a1a); // Darker, richer background
-            scene.fog = new THREE.Fog(0x0a0a1a, 30, 80); // Adjusted fog for depth
+            scene.background = new THREE.Color(0x05050c);
+            scene.fog = new THREE.Fog(0x05050c, 30, 60);
 
             // Camera
-            camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
-            camera.position.set(0, 0, 40); // Slightly further back for broader view
+            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+            camera.position.set(0, 0, 30);
 
             // Renderer
             renderer = new THREE.WebGLRenderer({ antialias: true });
             renderer.setSize(window.innerWidth, window.innerHeight);
             renderer.setPixelRatio(window.devicePixelRatio);
-            renderer.toneMapping = THREE.ACESFilmicToneMapping; // More cinematic look
-            renderer.toneMappingExposure = 1.2; // Adjust exposure
             document.body.appendChild(renderer.domElement);
-
-            // Post-processing for Bloom effect
-            composer = new EffectComposer(renderer);
-            const renderPass = new RenderPass(scene, camera);
-            composer.addPass(renderPass);
-
-            const bloomPass = new UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 1.5, 0.4, 0.85); // Intensity, Radius, Threshold
-            composer.addPass(bloomPass);
 
             // Controls
             controls = new OrbitControls(camera, renderer.domElement);
             controls.enableDamping = true;
-            controls.dampingFactor = 0.05; // Smoother damping
-            controls.minDistance = 15;
-            controls.maxDistance = 70;
-            controls.autoRotate = true; // Start with auto-rotate
-            controls.autoRotateSpeed = 0.5; // Slower auto-rotate
+            controls.minDistance = 10;
+            controls.maxDistance = 50;
             
             // Lighting
-            const ambientLight = new THREE.AmbientLight(0xffffff, 0.5); // Softer ambient light
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.4);
             scene.add(ambientLight);
 
-            const pointLight = new THREE.PointLight(0x00ffff, 2, 100); // Brighter cyan light
-            pointLight.position.set(10, 10, 30);
+            const pointLight = new THREE.PointLight(0xffffff, 1.5, 200);
+            pointLight.position.set(10, 10, 25);
             scene.add(pointLight);
 
-            const pointLight2 = new THREE.PointLight(0xff00ff, 1.5, 100); // Magenta accent light
-            pointLight2.position.set(-10, -10, -20);
-            scene.add(pointLight2);
-
-            const directionalLight = new THREE.DirectionalLight(0xffffff, 0.4);
-            directionalLight.position.set(-15, 10, 20);
+            const directionalLight = new THREE.DirectionalLight(0x00ffff, 0.3);
+            directionalLight.position.set(-10, -5, -20);
             scene.add(directionalLight);
             
             // --- Create Periodic Table ---
@@ -339,24 +259,21 @@
                 const color = categoryColors[element.category] || 0xffffff;
                 const material = new THREE.MeshStandardMaterial({
                     color: color,
-                    metalness: 0.5, // Increased metalness
-                    roughness: 0.4, // Reduced roughness for more shine
-                    emissive: new THREE.Color(color).multiplyScalar(0.1), // Subtle self-illumination
-                    emissiveIntensity: 1 // Controls the intensity of the emissive color.
+                    metalness: 0.3,
+                    roughness: 0.6,
                 });
                 
-                const textCanvas = createTextCanvas(element, new THREE.Color(color).getHexString()); // Pass color hex string
+                const object = new THREE.Mesh(geometry, material);
+
+                // Create text textures
+                const textCanvas = createTextCanvas(element);
                 const textTexture = new THREE.CanvasTexture(textCanvas);
                 textTexture.needsUpdate = true;
 
                 const textMaterial = new THREE.MeshStandardMaterial({ 
                     map: textTexture, 
-                    transparent: true, // Allow transparency for text rendering
-                    alphaTest: 0.5,    // Helps with anti-aliasing issues for text on plane
-                    metalness: 0.5,
-                    roughness: 0.4,
-                    emissive: new THREE.Color(color).multiplyScalar(0.1),
-                    emissiveIntensity: 1
+                    metalness: 0.3,
+                    roughness: 0.6,
                 });
                 
                 const materials = [
@@ -379,35 +296,29 @@
             });
 
             scene.add(periodicTableGroup);
-
-            // Add background particles
-            addParticles();
             
             // --- Event Listeners ---
             window.addEventListener('resize', onWindowResize, false);
             document.addEventListener('mousemove', onMouseMove, false);
-            document.addEventListener('click', onClick, false); // For interaction
-
-            raycaster = new THREE.Raycaster();
-            mouse = new THREE.Vector2();
 
             animate();
         }
 
         // --- Helper function to create text on canvas ---
-        function createTextCanvas(element, bgColorHex) {
+        function createTextCanvas(element) {
             const canvas = document.createElement('canvas');
             const context = canvas.getContext('2d');
             const size = 256;
             canvas.width = size;
             canvas.height = size;
 
-            context.fillStyle = `#${bgColorHex}`; // Use the passed hex color
+            // Background color matches the element
+            context.fillStyle = new THREE.Color(categoryColors[element.category]).getStyle();
             context.fillRect(0, 0, size, size);
 
             // Atomic Number
             context.font = 'bold 48px Arial';
-            context.fillStyle = 'rgba(255, 255, 255, 0.95)'; // Slightly more opaque
+            context.fillStyle = 'rgba(255, 255, 255, 0.9)';
             context.textAlign = 'left';
             context.fillText(element.atomic_number, 20, 50);
             
@@ -419,85 +330,11 @@
 
             // Atomic Mass
             context.font = '32px Arial';
-            context.fillStyle = 'rgba(255, 255, 255, 0.85)'; // Slightly more opaque
+            context.fillStyle = 'rgba(255, 255, 255, 0.8)';
             context.textAlign = 'center';
             context.fillText(element.atomic_mass, size / 2, size - 30);
             
             return canvas;
-        }
-
-        function addParticles() {
-            const numParticles = 2000;
-            const positions = new Float32Array(numParticles * 3);
-            const scales = new Float32Array(numParticles);
-            const colors = new Float32Array(numParticles * 3);
-
-            const noise = new ImprovedNoise();
-            const color = new THREE.Color();
-
-            for (let i = 0; i < numParticles; i++) {
-                const i3 = i * 3;
-
-                // Random positions in a sphere around the center
-                positions[i3] = (Math.random() * 2 - 1) * 100;
-                positions[i3 + 1] = (Math.random() * 2 - 1) * 100;
-                positions[i3 + 2] = (Math.random() * 2 - 1) * 100;
-
-                scales[i] = Math.random() * 1.5 + 0.5; // Random sizes
-
-                // Subtle color variations (e.g., cool tones)
-                color.setHSL(0.6 + Math.random() * 0.2, 0.8, 0.5 + Math.random() * 0.3);
-                colors[i3] = color.r;
-                colors[i3 + 1] = color.g;
-                colors[i3 + 2] = color.b;
-            }
-
-            const geometry = new THREE.BufferGeometry();
-            geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-            geometry.setAttribute('scale', new THREE.BufferAttribute(scales, 1));
-            geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
-
-            const material = new THREE.ShaderMaterial({
-                uniforms: {
-                    time: { value: 0 },
-                    pixelRatio: { value: window.devicePixelRatio }
-                },
-                vertexShader: `
-                    attribute float scale;
-                    attribute vec3 color;
-                    varying vec3 vColor;
-                    uniform float time;
-
-                    void main() {
-                        vColor = color;
-                        vec3 newPosition = position;
-                        newPosition.x += sin(time * 0.5 + position.y * 0.1) * 2.0;
-                        newPosition.y += cos(time * 0.7 + position.x * 0.1) * 2.0;
-                        newPosition.z += sin(time * 0.6 + position.z * 0.1) * 2.0;
-
-                        vec4 mvPosition = modelViewMatrix * vec4(newPosition, 1.0);
-                        gl_PointSize = scale * (300.0 / -mvPosition.z) * uniform.pixelRatio;
-                        gl_Position = projectionMatrix * mvPosition;
-                    }
-                `,
-                fragmentShader: `
-                    varying vec3 vColor;
-
-                    void main() {
-                        float r = 0.0;
-                        vec2 cxy = 2.0 * gl_PointCoord - 1.0;
-                        r = dot(cxy, cxy);
-                        if (r > 1.0) discard;
-                        gl_FragColor = vec4(vColor, 1.0 - r); // Fades out towards edges
-                    }
-                `,
-                blending: THREE.AdditiveBlending,
-                depthTest: false,
-                transparent: true
-            });
-
-            particles = new THREE.Points(geometry, material);
-            scene.add(particles);
         }
 
         // --- Event Handlers ---
@@ -505,114 +342,67 @@
             camera.aspect = window.innerWidth / window.innerHeight;
             camera.updateProjectionMatrix();
             renderer.setSize(window.innerWidth, window.innerHeight);
-            composer.setSize(window.innerWidth, window.innerHeight); // Update composer size
         }
         
         function onMouseMove(event) {
             mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
             mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
             
+            // Move tooltip with mouse
             tooltip.style.left = (event.clientX + 15) + 'px';
             tooltip.style.top = (event.clientY + 15) + 'px';
         }
 
-        function onClick() {
-            if (intersected) {
-                controls.autoRotate = false; // Stop auto-rotate on click
-                // Animate camera to look at the clicked object
-                new TWEEN.Tween(controls.target).to(intersected.position, 1000).easing(TWEEN.Easing.Quadratic.Out).start();
-                new TWEEN.Tween(camera.position).to(
-                    { 
-                        x: intersected.position.x + 0.5, 
-                        y: intersected.position.y + 0.5, 
-                        z: intersected.position.z + 10 
-                    }, 
-                    1000
-                ).easing(TWEEN.Easing.Quadratic.Out).start();
-            } else {
-                controls.autoRotate = true; // Resume auto-rotate if clicked on empty space
-                // Animate camera back to original view (or a default 'overview' position)
-                new TWEEN.Tween(controls.target).to(new THREE.Vector3(0, 0, 0), 1000).easing(TWEEN.Easing.Quadratic.Out).start();
-                new TWEEN.Tween(camera.position).to(new THREE.Vector3(0, 0, 40), 1000).easing(TWEEN.Easing.Quadratic.Out).start();
-            }
-        }
-
         // --- Animation Loop ---
-        function animate(time) {
+        function animate() {
             requestAnimationFrame(animate);
             controls.update();
-            TWEEN.update(time); // Update Tween.js animations
 
-            if (particles) {
-                particles.material.uniforms.time.value = time * 0.0001; // Animate particles
+            // Automatic rotation when not being controlled
+            if (!controls.autoRotate) {
+                 periodicTableGroup.rotation.y += 0.001;
             }
-
-            periodicTableGroup.rotation.y += 0.0005; // Slower, more subtle rotation
-
+           
             render();
             updateTooltip();
         }
         
         function updateTooltip() {
-            raycaster.setFromCamera(mouse, camera);
-            const intersects = raycaster.intersectObjects(objects);
+             raycaster.setFromCamera(mouse, camera);
+             const intersects = raycaster.intersectObjects(objects);
 
-            if (intersects.length > 0) {
+             if (intersects.length > 0) {
                 if (intersected !== intersects[0].object) {
                     if (intersected) {
-                        new TWEEN.Tween(intersected.scale).to({ x: 1, y: 1, z: 1 }, 300).easing(TWEEN.Easing.Elastic.Out).start();
-                        // Reset emissive intensity
-                        intersected.material[4].emissiveIntensity = 1; // Text material
-                        for (let i = 0; i < 4; i++) {
-                             intersected.material[i].emissiveIntensity = 1; // Side materials
-                        }
-                        intersected.material[5].emissiveIntensity = 1;
+                        intersected.scale.set(1, 1, 1); // Reset previous
                     }
                     intersected = intersects[0].object;
-                    new TWEEN.Tween(intersected.scale).to({ x: 1.2, y: 1.2, z: 1.2 }, 300).easing(TWEEN.Easing.Elastic.Out).start(); // More prominent hover scale
-                    // Increase emissive intensity on hover
-                    intersected.material[4].emissiveIntensity = 2; // Text material
-                    for (let i = 0; i < 4; i++) {
-                        intersected.material[i].emissiveIntensity = 2; // Side materials
-                    }
-                    intersected.material[5].emissiveIntensity = 2;
-
+                    intersected.scale.set(1.1, 1.1, 1.1); // Scale up current
 
                     const element = intersected.userData;
-                    tooltip.classList.add('active'); // Add active class for fade-in
+                    tooltip.style.display = 'block';
                     tooltip.innerHTML = `
                         <h3>${element.name} (${element.symbol})</h3>
                         <p><strong>Atomic Number:</strong> ${element.atomic_number}</p>
-                        <p><strong>Atomic Mass:</strong> ${element.atomic_mass} u</p>
+                        <p><strong>Atomic Mass:</strong> ${element.atomic_mass}</p>
                         <p><strong>Category:</strong> ${element.category}</p>
                     `;
                 }
-            } else {
-                if (intersected) {
-                    new TWEEN.Tween(intersected.scale).to({ x: 1, y: 1, z: 1 }, 300).easing(TWEEN.Easing.Elastic.Out).start();
-                    // Reset emissive intensity
-                    intersected.material[4].emissiveIntensity = 1;
-                    for (let i = 0; i < 4; i++) {
-                         intersected.material[i].emissiveIntensity = 1;
-                    }
-                    intersected.material[5].emissiveIntensity = 1;
-
-                }
-                intersected = null;
-                tooltip.classList.remove('active'); // Remove active class for fade-out
-            }
+             } else {
+                 if (intersected) {
+                     intersected.scale.set(1, 1, 1); // Reset
+                 }
+                 intersected = null;
+                 tooltip.style.display = 'none';
+             }
         }
         
         function render() {
-            composer.render(); // Render using the composer for post-processing effects
+            renderer.render(scene, camera);
         }
 
-        // Load Tween.js (for smooth animations)
-        const script = document.createElement('script');
-        script.src = 'https://unpkg.com/@tweenjs/tween.js@18.6.4/dist/tween.umd.js';
-        script.onload = init; // Initialize Three.js after Tween.js is loaded
-        document.head.appendChild(script);
-
+        // --- Start the application ---
+        init();
     </script>
 
 </body>
